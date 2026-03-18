@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine, Column, Integer, String, Numeric, Boolean, Text, DateTime, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from sqlalchemy.sql import func
-from sqlalchemy.exc import IntegrityError # NUEVO: Para manejar errores de base de datos
+from sqlalchemy.exc import IntegrityError # Para manejar errores de base de datos
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -13,7 +13,12 @@ import shutil
 import os
 
 # 1. CONFIGURACIÓN DE LA BASE DE DATOS (POSTGRESQL)
-SQLALCHEMY_DATABASE_URL = "postgresql://postgres:301125@localhost:5432/inventarioTienda?client_encoding=utf8"
+# Usamos os.getenv para proteger las credenciales. Si no encuentra la variable (ej. en local), usará tu cadena por defecto.
+# En Render, DEBES crear una variable de entorno llamada DATABASE_URL con tu cadena de conexión real.
+SQLALCHEMY_DATABASE_URL = os.getenv(
+    "DATABASE_URL", 
+    "postgresql://admin:rnGDEbwD02DFHG6ozZrVcJtqTvpRlWTZ@dpg-d6t0tt15pdvs73e41uj0-a.oregon-postgres.render.com/inventariotienda_czox"
+)
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -56,7 +61,7 @@ class ProductoCreate(BaseModel):
     stock: int
     url_imagen: Optional[str] = None
     id_categoria: int
-    activo: bool = True # NUEVO: Permitimos recibir el estado Activo desde React
+    activo: bool = True 
 
 class ProductoResponse(ProductoCreate):
     id_producto: int
@@ -65,15 +70,22 @@ class ProductoResponse(ProductoCreate):
     class Config:
         from_attributes = True
 
+class StockUpdate(BaseModel):
+    cantidad_a_restar: int
+
 # 4. INICIALIZACIÓN
 app = FastAPI(title="WS 2 - Gestión de Productos e Inventario")
 
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
+# Configuramos el CORS de forma dinámica
+# En Render, puedes crear una variable FRONTEND_URL con la URL de tu app en Vercel, Netlify o tu app móvil.
+FRONTEND_URL = os.getenv("FRONTEND_URL", "*") 
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=[FRONTEND_URL] if FRONTEND_URL != "*" else ["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -101,7 +113,6 @@ def create_categoria(categoria: CategoriaCreate, db: Session = Depends(get_db)):
     db.refresh(nueva_categoria)
     return nueva_categoria
 
-# --- NUEVO: Editar Categoría ---
 @app.put("/categorias/{id_categoria}", response_model=CategoriaResponse)
 def update_categoria(id_categoria: int, categoria: CategoriaCreate, db: Session = Depends(get_db)):
     cat = db.query(Categoria).filter(Categoria.id_categoria == id_categoria).first()
@@ -116,7 +127,6 @@ def update_categoria(id_categoria: int, categoria: CategoriaCreate, db: Session 
         db.rollback()
         raise HTTPException(status_code=400, detail="El nombre ya está en uso por otra categoría.")
 
-# --- NUEVO: Eliminar Categoría ---
 @app.delete("/categorias/{id_categoria}")
 def delete_categoria(id_categoria: int, db: Session = Depends(get_db)):
     cat = db.query(Categoria).filter(Categoria.id_categoria == id_categoria).first()
@@ -126,10 +136,9 @@ def delete_categoria(id_categoria: int, db: Session = Depends(get_db)):
         db.delete(cat)
         db.commit()
         return {"mensaje": "Categoría eliminada exitosamente"}
-    except IntegrityError: # Protege la BD si la categoría tiene productos
+    except IntegrityError: 
         db.rollback()
         raise HTTPException(status_code=400, detail="No puedes eliminar esta categoría porque hay productos que la están usando. Reasigna o elimina los productos primero.")
-
 
 # 6. ENDPOINTS DE PRODUCTOS E IMÁGENES
 @app.get("/productos", response_model=List[ProductoResponse])
@@ -144,7 +153,7 @@ def create_producto(producto: ProductoCreate, db: Session = Depends(get_db)):
     nuevo_producto = Producto(
         nombre=producto.nombre, descripcion=producto.descripcion, precio=producto.precio,
         stock=producto.stock, url_imagen=producto.url_imagen, id_categoria=producto.id_categoria,
-        activo=producto.activo # Guardamos el estado que nos mande React
+        activo=producto.activo 
     )
     db.add(nuevo_producto)
     db.commit()
@@ -162,7 +171,7 @@ def update_producto(id_producto: int, p_act: ProductoCreate, db: Session = Depen
     producto.stock = p_act.stock
     if p_act.url_imagen: producto.url_imagen = p_act.url_imagen
     producto.id_categoria = p_act.id_categoria
-    producto.activo = p_act.activo # Actualizamos el estado
+    producto.activo = p_act.activo 
     
     db.commit()
     db.refresh(producto)
@@ -181,4 +190,38 @@ async def upload_imagen(file: UploadFile = File(...)):
     file_location = f"uploads/{file.filename}"
     with open(file_location, "wb+") as file_object:
         shutil.copyfileobj(file.file, file_object)
-    return {"url": f"http://localhost:8000/uploads/{file.filename}"}
+    
+    # MODIFICADO: Render inyecta automáticamente 'RENDER_EXTERNAL_URL' con tu dominio público.
+    # Si no existe (ej. en local), hacemos un fallback a localhost:8000.
+    base_url = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
+    
+    # Nos aseguramos de quitar cualquier barra final para no romper la URL
+    base_url = base_url.rstrip("/")
+    
+    return {"url": f"{base_url}/uploads/{file.filename}"}
+
+@app.patch("/productos/{id_producto}/update-stock")
+def update_stock(id_producto: int, payload: StockUpdate, db: Session = Depends(get_db)):
+    # 1. Buscamos el producto
+    producto = db.query(Producto).filter(Producto.id_producto == id_producto).first()
+    if not producto: 
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    
+    # 2. HU15: Validamos si hay stock suficiente
+    if producto.stock < payload.cantidad_a_restar:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Stock insuficiente. Solo quedan {producto.stock} unidades de {producto.nombre}."
+        )
+    
+    # 3. HU14: Descontamos el stock
+    producto.stock -= payload.cantidad_a_restar
+    
+    # BONUS: Si llega a 0, se inactiva.
+    if producto.stock == 0:
+        producto.activo = False
+        
+    db.commit()
+    db.refresh(producto)
+    
+    return {"mensaje": "Stock actualizado exitosamente", "nuevo_stock": producto.stock}
