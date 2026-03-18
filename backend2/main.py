@@ -199,6 +199,25 @@ async def upload_imagen(file: UploadFile = File(...)):
     base_url = base_url.rstrip("/")
     
     return {"url": f"{base_url}/uploads/{file.filename}"}
+# Agregar esto en backend2/main.py (en la sección de endpoints de productos)
+
+@app.get("/productos/reporte/bajo-stock", response_model=List[ProductoResponse])
+def reporte_bajo_stock(umbral: int = 10, db: Session = Depends(get_db)):
+    """
+    HU20: Consultar un reporte específico de productos con bajo stock.
+    Retorna todos los productos cuyo stock sea menor o igual al umbral especificado.
+    Por defecto, el umbral es 10.
+    """
+    # Filtramos productos activos cuyo stock sea menor o igual al umbral
+    productos_bajo_stock = db.query(Producto).filter(
+        Producto.stock <= umbral,
+        Producto.activo == True
+    ).order_by(Producto.stock.asc()).all()
+    
+    # Si quisieras exportarlo a Excel desde Python, usaríamos pandas, 
+    # pero enviar un JSON limpio le permite a tu frontend (React/Angular) 
+    # mostrarlo en una tabla bonita al consultor.
+    return productos_bajo_stock
 
 @app.patch("/productos/{id_producto}/update-stock")
 def update_stock(id_producto: int, payload: StockUpdate, db: Session = Depends(get_db)):
@@ -223,5 +242,6 @@ def update_stock(id_producto: int, payload: StockUpdate, db: Session = Depends(g
         
     db.commit()
     db.refresh(producto)
+    
     
     return {"mensaje": "Stock actualizado exitosamente", "nuevo_stock": producto.stock}
