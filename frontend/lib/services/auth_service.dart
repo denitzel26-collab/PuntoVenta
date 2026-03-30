@@ -3,8 +3,8 @@ import 'package:http/http.dart' as http;
 import '../models/user_model.dart';
 
 class AuthService {
-  // Tu URL local de Node.js (ajustada a tu index.js)
-  final String baseUrl = "http://localhost:3000/auth"; 
+  // URL de tu backend publicado en Render
+  final String baseUrl = "https://puntoventa-3gn6.onrender.com/auth"; 
 
   Future<User?> login(String username, String password) async {
     try {
