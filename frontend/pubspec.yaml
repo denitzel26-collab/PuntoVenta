@@ -14,7 +14,6 @@ dependencies:
   cupertino_icons: ^1.0.8
   http: ^1.6.0
   url_launcher: ^6.3.2
-  # --- AQUÍ AGREGAMOS LAS NUEVAS LIBRERÍAS ---
   pdf: ^3.10.0
   printing: ^5.11.0
   intl: ^0.18.1
@@ -26,4 +25,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  # Nota: No agregues nada debajo de 'flutter:' a menos que sean assets o fonts.
+
+  assets:
+    - assets/logo.png
+    - assets/logo2.png

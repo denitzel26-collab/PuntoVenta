@@ -194,34 +194,74 @@ class _RegistroVentaState extends State<RegistroVenta> {
     return FutureBuilder<List<Producto>>(
       future: _apiProd.fetchProductos(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return Center(child: CircularProgressIndicator());
-        final filtrados = snapshot.data!.where((p) => p.nombre.toLowerCase().contains(busqueda.toLowerCase())).toList();
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         
-        return GridView.builder(
-          padding: EdgeInsets.all(16),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3, 
-            childAspectRatio: 0.8,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10
+        final lista = snapshot.data!.where((p) => p.nombre.toLowerCase().contains(busqueda.toLowerCase())).toList();
+        
+        if (lista.isEmpty) return const Center(child: Text("No se encontraron productos"));
+
+        return Container(
+          margin: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 5)],
           ),
-          itemCount: filtrados.length,
-          itemBuilder: (context, i) {
-            final p = filtrados[i];
-            return Card(
-              child: InkWell(
-                onTap: () => _agregarAlCarrito(p),
-                child: Column(
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            itemCount: lista.length,
+            separatorBuilder: (context, index) => const Divider(height: 1),
+            itemBuilder: (context, i) {
+              final p = lista[i];
+              return ListTile(
+                leading: Container(
+                  width: 45,
+                  height: 45,
+                  decoration: BoxDecoration(
+                    color: mlBlue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.inventory_2_outlined, color: mlBlue),
+                ),
+                title: Text(
+                  p.nombre,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                subtitle: Text(
+                  "Stock disponible: ${p.stock}",
+                  style: TextStyle(
+                    color: p.stock < 5 ? Colors.red : Colors.grey[600],
+                    fontSize: 13,
+                  ),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(child: Icon(Icons.inventory, size: 40, color: mlBlue)),
-                    Text(p.nombre, textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold)),
-                    Text("\$${p.precio}", style: TextStyle(color: mlBlue)),
-                    Text("Stock: ${p.stock}", style: TextStyle(fontSize: 10, color: p.stock < 5 ? Colors.red : Colors.grey)),
+                    Text(
+                      "\$${p.precio.toStringAsFixed(2)}",
+                      style: TextStyle(
+                        color: mlBlue,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 17,
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    ElevatedButton(
+                      onPressed: () => _agregarAlCarrito(p),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: mlBlue,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                      ),
+                      child: const Text("Agregar"),
+                    ),
                   ],
                 ),
-              ),
-            );
-          },
+                onTap: () => _agregarAlCarrito(p), // También se agrega al tocar la fila
+              );
+            },
+          ),
         );
       },
     );
