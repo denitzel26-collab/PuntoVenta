@@ -371,7 +371,7 @@ class _RegistroVentaState extends State<RegistroVenta> {
     );
   }
 
-  Widget _buildGridProductos() {
+ Widget _buildGridProductos() {
     return FutureBuilder<List<Producto>>(
       future: _apiProd.fetchProductos(),
       builder: (context, snapshot) {
@@ -381,42 +381,41 @@ class _RegistroVentaState extends State<RegistroVenta> {
         
         if (lista.isEmpty) return const Center(child: Text("No se encontraron productos"));
 
-        return GridView.builder(
+        return ListView.builder(
           padding: const EdgeInsets.all(15),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3, 
-            childAspectRatio: 0.85,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-          ),
           itemCount: lista.length,
           itemBuilder: (context, i) {
             final p = lista[i];
             return Card(
-              elevation: 2,
+              margin: const EdgeInsets.only(bottom: 10),
+              elevation: 1,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: () => _agregarAlCarrito(p),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+                leading: CircleAvatar(
+                  backgroundColor: mlBlue.withOpacity(0.1),
+                  child: Icon(Icons.inventory_2, color: mlBlue, size: 20),
+                ),
+                title: Text(p.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text("Disponible: ${p.stock}", 
+                  style: TextStyle(color: p.stock < 5 ? Colors.red : Colors.green, fontSize: 13)),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.inventory_2_outlined, size: 45, color: mlBlue.withOpacity(0.7)),
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 5),
-                      child: Text(p.nombre, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    ),
-                    Text("\$${p.precio}", style: TextStyle(color: mlBlue, fontWeight: FontWeight.bold, fontSize: 16)),
-                    const SizedBox(height: 5),
+                    Text("\$${p.precio}", 
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: mlBlue)),
+                    const SizedBox(width: 15),
+                    // --- ICONO DE AGREGAR EN LUGAR DE BOTÓN ---
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: (p.stock < 5 ? Colors.red : Colors.green).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10)
+                        color: mlBlue,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Text("Stock: ${p.stock}", 
-                           style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: p.stock < 5 ? Colors.red : Colors.green[700])),
+                      child: IconButton(
+                        icon: const Icon(Icons.add_shopping_cart, color: Colors.white),
+                        tooltip: 'Agregar al carrito',
+                        onPressed: p.stock > 0 ? () => _agregarAlCarrito(p) : null,
+                      ),
                     ),
                   ],
                 ),
@@ -428,3 +427,4 @@ class _RegistroVentaState extends State<RegistroVenta> {
     );
   }
 }
+// --- FIN DE LA CLASE REGISTROVENTA ---
