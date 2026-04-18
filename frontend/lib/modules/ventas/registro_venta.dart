@@ -7,6 +7,8 @@ import '../../services/api_ventas.dart';
 import '../../services/ticket_service.dart';
 
 class RegistroVenta extends StatefulWidget {
+  const RegistroVenta({super.key});
+
   @override
   _RegistroVentaState createState() => _RegistroVentaState();
 }
@@ -23,8 +25,17 @@ class _RegistroVentaState extends State<RegistroVenta> {
   final TextEditingController _pagaConCtrl = TextEditingController();
   final TextEditingController _numTarjetaCtrl = TextEditingController();
   double cambio = 0;
+  bool _generandoTicket = false;
+
+  Future<List<Producto>>? _productosFuture;
 
   final Color mlBlue = const Color(0xFF3483FA);
+
+  @override
+  void initState() {
+    super.initState();
+    _productosFuture = _apiProd.fetchProductos();
+  }
 
   @override
   void dispose() {
@@ -115,6 +126,7 @@ class _RegistroVentaState extends State<RegistroVenta> {
     final resultado = await _apiVentas.registrarVenta(nuevaVenta);
 
     if (resultado['success']) {
+      setState(() => _generandoTicket = true);
       await TicketService.generarTicket(
         items: List.from(carrito),
         total: total,
@@ -122,8 +134,13 @@ class _RegistroVentaState extends State<RegistroVenta> {
         pagoCon: double.tryParse(_pagaConCtrl.text) ?? total,
         cambio: cambio,
       );
+      setState(() => _generandoTicket = false);
       _notificar("Venta Exitosa", Colors.green);
       _limpiarFormulario();
+      // Refrescar la lista de productos para mostrar el stock actualizado
+      setState(() {
+        _productosFuture = _apiProd.fetchProductos();
+      });
     } else {
       _notificar("Error: ${resultado['message']}", Colors.red);
     }
@@ -136,6 +153,7 @@ class _RegistroVentaState extends State<RegistroVenta> {
       _numTarjetaCtrl.clear();
       total = 0;
       cambio = 0;
+      _generandoTicket = false;
     });
   }
 
@@ -192,15 +210,17 @@ class _RegistroVentaState extends State<RegistroVenta> {
                   _buildCamposPago(),
                   const SizedBox(height: 10),
                   ElevatedButton(
-                    onPressed: _esVentaValida() ? _confirmarVenta : null,
+                    onPressed: _esVentaValida() && !_generandoTicket ? _confirmarVenta : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green[700],
                       disabledBackgroundColor: Colors.grey[300],
                       minimumSize: const Size(double.infinity, 55),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    child: Text("FINALIZAR COBRO \$${total.toStringAsFixed(2)}", 
-                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: _generandoTicket
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : Text("FINALIZAR COBRO \$${total.toStringAsFixed(2)}", 
+                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -222,7 +242,7 @@ class _RegistroVentaState extends State<RegistroVenta> {
 
  Widget _buildListaCarrito() {
   return FutureBuilder<List<Producto>>(
-    future: _apiProd.fetchProductos(),
+    future: _productosFuture,
     builder: (context, snapshot) {
       return ListView.separated(
         itemCount: carrito.length,
@@ -233,7 +253,8 @@ class _RegistroVentaState extends State<RegistroVenta> {
           // Obtenemos el stock real del producto desde la API
           int stockMax = snapshot.data?.firstWhere(
             (p) => p.id == item.productId, 
-            orElse: () => Producto(id: 0, nombre: '', precio: 0, stock: 99)
+              orElse: () => 
+                Producto(id: item.productId, nombre: item.name, precio: item.priceAtSale, stock: 99, descripcion:'', activo: true)  
           ).stock ?? 99;
 
           return ListTile(
@@ -314,7 +335,7 @@ class _RegistroVentaState extends State<RegistroVenta> {
       child: Column(
         children: [
           DropdownButtonFormField<String>(
-            value: metodoPago,
+            initialValue: metodoPago,
             decoration: const InputDecoration(labelText: "Método de Pago", border: InputBorder.none),
             items: ['Efectivo', 'Tarjeta'].map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
             onChanged: (val) => setState(() {
@@ -346,7 +367,15 @@ class _RegistroVentaState extends State<RegistroVenta> {
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               maxLength: 16,
-              decoration: const InputDecoration(labelText: "Número de Tarjeta", counterText: "", hintText: "xxxx xxxx xxxx xxxx"),
+              decoration: InputDecoration(
+                labelText: "Número de Tarjeta", 
+                counterText: "", 
+                hintText: "xxxx xxxx xxxx xxxx",
+                errorText: metodoPago == 'Tarjeta' && _numTarjetaCtrl.text.isNotEmpty && _numTarjetaCtrl.text.length < 16 
+                  ? "Debe tener 16 dígitos" 
+                  : null,
+              ),
+              onChanged: (val) => setState(() {}),
             ),
           ],
         ],
@@ -373,7 +402,7 @@ class _RegistroVentaState extends State<RegistroVenta> {
 
  Widget _buildGridProductos() {
     return FutureBuilder<List<Producto>>(
-      future: _apiProd.fetchProductos(),
+      future: _productosFuture,
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         
@@ -391,21 +420,53 @@ class _RegistroVentaState extends State<RegistroVenta> {
               elevation: 1,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
-                leading: CircleAvatar(
-                  backgroundColor: mlBlue.withOpacity(0.1),
-                  child: Icon(Icons.inventory_2, color: mlBlue, size: 20),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+                
+                // --- NUEVO: LÓGICA DE LA IMAGEN ---
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: p.urlImagen != null && p.urlImagen!.isNotEmpty
+                      ? Image.network(
+                          p.urlImagen!,
+                          width: 55,
+                          height: 55,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => _iconoPorDefecto(),
+                        )
+                      : _iconoPorDefecto(),
                 ),
+                
                 title: Text(p.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text("Disponible: ${p.stock}", 
-                  style: TextStyle(color: p.stock < 5 ? Colors.red : Colors.green, fontSize: 13)),
+                
+                // --- NUEVO: DESCRIPCIÓN Y STOCK ---
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (p.descripcion.isNotEmpty && p.descripcion != 'Sin descripción')
+                      Text(
+                        p.descripcion,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "Disponible: ${p.stock}", 
+                      style: TextStyle(
+                        color: p.stock < 5 ? Colors.red : Colors.green, 
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold
+                      )
+                    ),
+                  ],
+                ),
+                
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text("\$${p.precio}", 
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: mlBlue)),
                     const SizedBox(width: 15),
-                    // --- ICONO DE AGREGAR EN LUGAR DE BOTÓN ---
                     Container(
                       decoration: BoxDecoration(
                         color: mlBlue,
@@ -426,5 +487,17 @@ class _RegistroVentaState extends State<RegistroVenta> {
       },
     );
   }
-}
+
+  // --- MÉTODO DE APOYO PARA EL ÍCONO CUANDO NO HAY IMAGEN ---
+  Widget _iconoPorDefecto() {
+    return Container(
+      width: 55, height: 55,
+      decoration: BoxDecoration(
+        color: mlBlue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8)
+      ),
+      child: Icon(Icons.inventory_2, color: mlBlue, size: 25),
+    );
+  }
 // --- FIN DE LA CLASE REGISTROVENTA ---
+}

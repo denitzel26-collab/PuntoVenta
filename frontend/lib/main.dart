@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'modules/auth/login_screen.dart'; 
-import 'modules/ventas/registro_venta.dart';
+import 'package:frontend/modules/inventario/inventario_screen.dart';
+import 'package:frontend/modules/ventas/registro_venta.dart' hide GestionInventario;
 void main() => runApp(const PuntoVentaApp());
 
 class PuntoVentaApp extends StatelessWidget {
@@ -17,7 +17,7 @@ class PuntoVentaApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         scaffoldBackgroundColor: Colors.grey[100], 
       ),
-      home: RegistroVenta(),
+      home:  GestionInventario(),
     );
   }
 }

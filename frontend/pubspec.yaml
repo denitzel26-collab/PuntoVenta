@@ -5,18 +5,26 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.11.1
+  sdk: '>=3.11.1 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
+  
+  # Comunicación y red
   http: ^1.6.0
+  dio: ^5.3.3  # Dio es excelente para el manejo de archivos y FormData
+  
+  # Multimedia y utilidades
+  image_picker: ^1.0.4  # Para seleccionar fotos de la galería o cámara
   url_launcher: ^6.3.2
+  intl: ^0.18.1
+
+  # Generación de PDF e Impresión (Tickets)
   pdf: ^3.10.0
   printing: ^5.11.0
-  intl: ^0.18.1
 
 dev_dependencies:
   flutter_test:
